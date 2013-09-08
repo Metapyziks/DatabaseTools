@@ -10,7 +10,7 @@ SRC = \
 	./*.cs \
 	Properties/*.cs
 
-SYSLIBS = System.Data.dll,System.Core.dll,System.Web.dll
+SYSLIBS = System.Data.dll,System.Core.dll,System.Web.dll,Mono.Data.Sqlite.dll
 
 DEBUGBINDIR = $(BINDIR)/Debug
 RELEASEBINDIR = $(BINDIR)/Release
