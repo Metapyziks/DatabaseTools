@@ -59,7 +59,7 @@ namespace DatabaseTools
             Type[] types;
 
             try {
-                types = Assembly.GetExecutingAssembly().GetTypes();
+                types = Assembly.GetEntryAssembly().GetTypes();
             } catch (ReflectionTypeLoadException e) {
                 Console.ForegroundColor = ConsoleColor.Red;
                 foreach (var ex in e.LoaderExceptions) {
