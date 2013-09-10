@@ -446,6 +446,16 @@ namespace DatabaseTools
             return entity;
         }
 
+        public static int Begin()
+        {
+            return ExecuteNonQuery("begin");
+        }
+
+        public static int End()
+        {
+            return ExecuteNonQuery("end");
+        }
+
         /// <summary>
         /// Returns the first item from the specified table that matches
         /// all given predicates, or null if no items do.
