@@ -448,12 +448,22 @@ namespace DatabaseTools
 
         public static int Begin()
         {
-            return ExecuteNonQuery("begin");
+#if LINUX
+            return ExecuteNonQuery("BEGIN");
+#else
+            // return ExecuteNonQuery("BEGIN TRANSACTION");
+            return 1;
+#endif
         }
 
         public static int End()
         {
-            return ExecuteNonQuery("end");
+#if LINUX
+            return ExecuteNonQuery("END");
+#else
+            // return ExecuteNonQuery("COMMIT TRANSACTION");
+            return 1;
+#endif
         }
 
         /// <summary>
