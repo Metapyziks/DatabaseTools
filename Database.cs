@@ -144,7 +144,7 @@ namespace DatabaseTools
 
             if (exp is MemberExpression) {
                 MemberExpression mExp = (MemberExpression) exp;
-                return RequiresParam(mExp.Expression);
+                return mExp.Expression != null && RequiresParam(mExp.Expression);
             }
 
             if (exp is MethodCallExpression) {
@@ -184,6 +184,10 @@ namespace DatabaseTools
                         Expression.Invoke(toString, exp)).Compile()());
                 } else if (exp.Type == typeof(double)) {
                     Expression<Func<double,String>> toString = x => x.ToString();
+                    return String.Format("'{0}'", Expression.Lambda<Func<String>>(
+                        Expression.Invoke(toString, exp)).Compile()());
+                } else if (exp.Type == typeof(DateTime)) {
+                    Expression<Func<DateTime,String>> toString = x => x.Ticks.ToString();
                     return String.Format("'{0}'", Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
                 } else {
