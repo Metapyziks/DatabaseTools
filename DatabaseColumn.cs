@@ -78,16 +78,16 @@ namespace DatabaseTools
                 return name;
             }
 
-            if (type == typeof(Int64) || type == typeof(DateTime))
+            if (type == typeof(Int64) || type == typeof(UInt64) || type == typeof(DateTime))
                 return "BIGINT";
 
-            if (type == typeof(Int32))
+            if (type == typeof(Int32) || type == typeof(UInt32))
                 return "INTEGER";
 
-            if (type == typeof(Int16))
+            if (type == typeof(Int16) || type == typeof(UInt16))
                 return "SMALLINT";
 
-            if (type == typeof(Byte))
+            if (type == typeof(Byte) || type == typeof(SByte))
                 return "TINYINT";
 
             if (type == typeof(Double) || type == typeof(Single))
