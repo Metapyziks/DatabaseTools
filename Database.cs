@@ -182,6 +182,10 @@ namespace DatabaseTools
                     Expression<Func<int,String>> toString = x => x.ToString();
                     return String.Format("'{0}'", Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
+                } else if (exp.Type == typeof(ulong)) {
+                    Expression<Func<ulong,String>> toString = x => x.ToString();
+                    return String.Format("'{0}'", Expression.Lambda<Func<String>>(
+                        Expression.Invoke(toString, exp)).Compile()());
                 } else if (exp.Type == typeof(double)) {
                     Expression<Func<double,String>> toString = x => x.ToString();
                     return String.Format("'{0}'", Expression.Lambda<Func<String>>(
