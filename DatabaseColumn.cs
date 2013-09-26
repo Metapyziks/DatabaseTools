@@ -126,6 +126,7 @@ namespace DatabaseTools
         public object GetValue(object entity)
         {
             object val = _property.GetValue(entity, null);
+            if (val == null) return null;
             if (val is DateTime)
                 return ((DateTime) val).Ticks;
             else if (val.GetType().IsEnum)

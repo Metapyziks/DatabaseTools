@@ -175,27 +175,27 @@ namespace DatabaseTools
         {
             if (!RequiresParam(exp)) {
                 if (exp.Type == typeof(bool)) {
-                    Expression<Func<bool,String>> toString = x => x ? "1'='1" : "1'='0";
-                    return String.Format("'{0}'", Expression.Lambda<Func<String>>(
-                        Expression.Invoke(toString, exp)).Compile()());
+                    Expression<Func<bool,String>> toString = x => x ? "'1'='1'" : "'1'='0'";
+                    return Expression.Lambda<Func<String>>(
+                        Expression.Invoke(toString, exp)).Compile()();
                 } else if (exp.Type == typeof(int)) {
                     Expression<Func<int,String>> toString = x => x.ToString();
-                    return String.Format("'{0}'", Expression.Lambda<Func<String>>(
+                    return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
                 } else if (exp.Type == typeof(ulong)) {
                     Expression<Func<ulong,String>> toString = x => x.ToString();
-                    return String.Format("'{0}'", Expression.Lambda<Func<String>>(
+                    return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
                 } else if (exp.Type == typeof(double)) {
                     Expression<Func<double,String>> toString = x => x.ToString();
-                    return String.Format("'{0}'", Expression.Lambda<Func<String>>(
+                    return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
                 } else if (exp.Type == typeof(DateTime)) {
                     Expression<Func<DateTime,String>> toString = x => x.Ticks.ToString();
-                    return String.Format("'{0}'", Expression.Lambda<Func<String>>(
+                    return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
                 } else {
-                    return String.Format("'{0}'", Expression.Lambda<Func<Object>>(exp).Compile()().ToString().Escape());
+                    return FormatValue(Expression.Lambda<Func<Object>>(exp).Compile()());
                 }
             }
 
@@ -247,7 +247,7 @@ namespace DatabaseTools
                     return pExp.Name;
                 case ExpressionType.Constant:
                     var cExp = (ConstantExpression) exp;
-                    return String.Format("'{0}'", cExp.Value.ToString());
+                    return FormatValue(cExp.Value);
                 case ExpressionType.MemberAccess:
                     var mExp = (MemberExpression) exp;
                     if (removeParam && mExp.Expression is ParameterExpression)
@@ -324,6 +324,12 @@ namespace DatabaseTools
             using (var reader = cmd.ExecuteReader()) {
                 return reader.Read();
             }
+        }
+
+        private static String FormatValue(Object value)
+        {
+            if (value == null) return "NULL";
+            return String.Format("'{0}'", value.ToString().Escape());
         }
 
         private static void GenerateTableDependencies(DatabaseTable table, String alias, List<String> from, List<String> columns)
@@ -614,10 +620,10 @@ namespace DatabaseTools
             IEnumerable<DatabaseColumn> valid = table.Columns.Where(x => !x.AutoIncrement);
 
             String columns = String.Join(",\n  ", valid.Select(x => x.Name));
-            String values = String.Join("',\n  '", valid.Select(x => x.GetValue(entity).ToString().Escape()));
+            String values = String.Join(",\n  ", valid.Select(x => FormatValue(x.GetValue(entity))));
 
             StringBuilder builder = new StringBuilder();
-            builder.AppendFormat("INSERT INTO {0}\n(\n  {1}\n) VALUES (\n  '{2}'\n)",
+            builder.AppendFormat("INSERT INTO {0}\n(\n  {1}\n) VALUES (\n  {2}\n)",
                 table.Name, columns, values);
 
             return ExecuteNonQuery(builder.ToString());
@@ -638,9 +644,9 @@ namespace DatabaseTools
             IEnumerable<DatabaseColumn> valid = table.Columns.Where(x => x != primaryKey);
 
             String columns = String.Join(",\n  ", valid.Select(x =>
-                String.Format("{0} = '{1}'", x.Name, x.GetValue(entity).ToString().Escape())));
+                String.Format("{0} = {1}", x.Name, FormatValue(x.GetValue(entity)))));
 
-            String predicate = String.Format("{0}='{1}'", primaryKey.Name, primaryKey.GetValue(entity));
+            String predicate = String.Format("{0} = {1}", primaryKey.Name, FormatValue(primaryKey.GetValue(entity)));
 
             StringBuilder builder = new StringBuilder();
             builder.AppendFormat("UPDATE {0} SET\n  {1}\nWHERE {2}",
@@ -670,8 +676,8 @@ namespace DatabaseTools
             DatabaseTable table = GetTable<T>();
             DatabaseColumn primaryKey = table.Columns.First(x => x.PrimaryKey);
 
-            String predicate = String.Join("\n  OR ", entities.Select(x => String.Format("{0} = '{1}'",
-                primaryKey.Name, primaryKey.GetValue(x).ToString().Escape())));
+            String predicate = String.Join("\n  OR ", entities.Select(x => String.Format("{0} = {1}",
+                primaryKey.Name, FormatValue(primaryKey.GetValue(x)))));
 
             StringBuilder builder = new StringBuilder();
             builder.AppendFormat("DELETE FROM {0} WHERE {1}",
