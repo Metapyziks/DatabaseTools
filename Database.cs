@@ -538,7 +538,7 @@ namespace DatabaseTools
             DatabaseTable table = GetTable<T>();
             DBCommand cmd = GenerateSelectCommand(table, false, predicates);
 
-            List<T> entities = new List<T>();
+            var entities = new List<T>();
             using (DBDataReader reader = cmd.ExecuteReader()) {
                 T entity;
                 while ((entity = reader.ReadEntity<T>(table)) != null)
@@ -574,12 +574,12 @@ namespace DatabaseTools
             return Select<T>(x => true);
         }
 
-        private static List<Object> SelectAll(DatabaseTable table)
+        private static IEnumerable<object> SelectAll(DatabaseTable table)
         {
-            DBCommand cmd = GenerateSelectCommand<Object>(table, false, x => true);
+            var cmd = GenerateSelectCommand<Object>(table, false, x => true);
 
-            List<Object> entities = new List<Object>();
-            using (DBDataReader reader = cmd.ExecuteReader()) {
+            var entities = new List<Object>();
+            using (var reader = cmd.ExecuteReader()) {
                 Object entity;
                 while ((entity = reader.ReadEntity(table)) != null)
                     entities.Add(entity);
@@ -592,41 +592,51 @@ namespace DatabaseTools
             where T0 : new()
             where T1 : new()
         {
-            return Select<T0, T1>(joinOn, (x, y) => true);
+            return Select(joinOn, (x, y) => true);
         }
 
-        public static int Insert<T>(T entity)
+        public static void Insert<T>(T entity)
             where T : new()
         {
-            return Insert(GetTable<T>(), entity);
+            Insert(GetTable<T>(), entity);
         }
 
-        private static int Insert(DatabaseTable table, Object entity)
+        private static void Insert(DatabaseTable table, Object entity)
         {
             if (table.SuperTable != null) {
                 Insert(table.SuperTable, entity);
                 var inherited = table.Columns.Where(x => !x.AutoIncrement
                     && table.SuperTable.Columns.Any(y => y.Name == x.Name))
-                    .Select(x => new Tuple<DatabaseColumn, DatabaseColumn>(
+                    .Select(x => Tuple.Create(
                         x, table.SuperTable.Columns.First(y => y.Name == x.Name)));
-                if (inherited.Count() > 0) {
-                    Object super = Database.SelectLast(table.SuperTable);
+
+                if (inherited.Any()) {
+                    var super = SelectLast(table.SuperTable);
                     foreach (var pair in inherited) {
                         pair.Item1.SetValue(entity, pair.Item2.GetValue(super));
                     }
                 }
             }
 
-            IEnumerable<DatabaseColumn> valid = table.Columns.Where(x => !x.AutoIncrement);
+            var nonAuto = table.Columns.Where(x => !x.AutoIncrement).ToArray();
 
-            String columns = String.Join(",\n  ", valid.Select(x => x.Name));
-            String values = String.Join(",\n  ", valid.Select(x => FormatValue(x.GetValue(entity))));
+            var columns = String.Join(",\n  ", nonAuto.Select(x => x.Name));
+            var values = String.Join(",\n  ", nonAuto.Select(x => FormatValue(x.GetValue(entity))));
 
-            StringBuilder builder = new StringBuilder();
-            builder.AppendFormat("INSERT INTO {0}\n(\n  {1}\n) VALUES (\n  {2}\n)",
+            var builder = new StringBuilder();
+            builder.AppendFormat("INSERT INTO {0}\n(\n  {1}\n) OUTPUT INSERTED.* VALUES (\n  {2}\n)",
                 table.Name, columns, values);
+            
+            Object result;
+            using (var reader = new DBCommand(builder.ToString(), _sConnection).ExecuteReader())
+                result = reader.ReadEntity(table);
 
-            return ExecuteNonQuery(builder.ToString());
+            var auto = table.Columns.Where(x => x.AutoIncrement).ToArray();
+            if (auto.Length == 0) return;
+
+            foreach (var col in auto) {
+                col.SetValue(entity, col.GetValue(result));
+            }
         }
 
         public static int Update<T>(T entity)
@@ -671,7 +681,7 @@ namespace DatabaseTools
         public static int Delete<T>(IEnumerable<T> entities)
             where T : new()
         {
-            if (entities.Count() == 0) return 0;
+            if (!entities.Any()) return 0;
 
             DatabaseTable table = GetTable<T>();
             DatabaseColumn primaryKey = table.Columns.First(x => x.PrimaryKey);
