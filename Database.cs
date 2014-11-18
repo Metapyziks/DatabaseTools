@@ -41,7 +41,11 @@ namespace DatabaseTools
 
         public static CultureInfo CultureInfo = new CultureInfo("en-US");
 
-        public static String FileName = "|DataDirectory|\\Database.sdf";
+        public static String FileName
+        {
+            get { return Path.Combine((String) AppDomain.CurrentDomain.GetData("DataDirectory"), "Database.sdf"; }
+        }
+
         private static DBConnection _sConnection;
 
         private static readonly List<DatabaseTable> _sTables = new List<DatabaseTable>();
@@ -94,7 +98,7 @@ namespace DatabaseTools
             //            DropDatabase();
             //#endif
 
-            if (!File.Exists(FileName.Replace("|DataDirectory|", (String) AppDomain.CurrentDomain.GetData("DataDirectory"))))
+            if (!File.Exists(FileName))
                 CreateDatabase("Data Source={0};", FileName);
             else
                 Connect("Data Source={0};", FileName);
