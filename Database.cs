@@ -43,7 +43,7 @@ namespace DatabaseTools
 
         public static String FileName
         {
-            get { return Path.Combine((String) AppDomain.CurrentDomain.GetData("DataDirectory"), "Database.sdf"); }
+            get { return Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Database.sdf"); }
         }
 
         private static DBConnection _sConnection;
