@@ -41,7 +41,7 @@ namespace DatabaseTools
 
         public static CultureInfo CultureInfo = new CultureInfo("en-US");
 
-        public static String FileName = "Database.db";
+        public static String FileName = "|DataDirectory|\\Database.sdf";
         private static DBConnection _sConnection;
 
         private static List<DatabaseTable> _sTables = new List<DatabaseTable>();
