@@ -43,7 +43,7 @@ namespace DatabaseTools
 
         public static String FileName
         {
-            get { return Path.Combine((String) AppDomain.CurrentDomain.GetData("DataDirectory"), "Database.sdf"; }
+            get { return Path.Combine((String) AppDomain.CurrentDomain.GetData("DataDirectory"), "Database.sdf"); }
         }
 
         private static DBConnection _sConnection;
@@ -89,7 +89,6 @@ namespace DatabaseTools
                     table.Create();
                 }
             }
-
         }
 
         public static void ConnectLocal()
@@ -632,7 +631,7 @@ namespace DatabaseTools
             var auto = table.Columns.FirstOrDefault(x => x.AutoIncrement && x.PrimaryKey);
             if (auto == null) return result;
 
-            var cmd = new DBCommand("SELECT @@IDENTITY AS ID");
+            var cmd = new DBCommand("SELECT @@IDENTITY AS ID", _sConnection);
             var res = cmd.ExecuteScalar();
 
             auto.SetValue(entity, Convert.ToInt32(res));
