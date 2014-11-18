@@ -44,7 +44,7 @@ namespace DatabaseTools
         public static String FileName = "|DataDirectory|\\Database.sdf";
         private static DBConnection _sConnection;
 
-        private static List<DatabaseTable> _sTables = new List<DatabaseTable>();
+        private static readonly List<DatabaseTable> _sTables = new List<DatabaseTable>();
 
         public static void Connect(String connStrFormat, params String[] args)
         {
@@ -595,13 +595,13 @@ namespace DatabaseTools
             return Select(joinOn, (x, y) => true);
         }
 
-        public static void Insert<T>(T entity)
+        public static int Insert<T>(T entity)
             where T : new()
         {
-            Insert(GetTable<T>(), entity);
+            return Insert(GetTable<T>(), entity);
         }
 
-        private static void Insert(DatabaseTable table, Object entity)
+        private static int Insert(DatabaseTable table, Object entity)
         {
             if (table.SuperTable != null) {
                 Insert(table.SuperTable, entity);
@@ -623,20 +623,17 @@ namespace DatabaseTools
             var columns = String.Join(",\n  ", nonAuto.Select(x => x.Name));
             var values = String.Join(",\n  ", nonAuto.Select(x => FormatValue(x.GetValue(entity))));
 
-            var builder = new StringBuilder();
-            builder.AppendFormat("INSERT INTO {0}\n(\n  {1}\n) OUTPUT INSERTED.* VALUES (\n  {2}\n)",
-                table.Name, columns, values);
-            
-            Object result;
-            using (var reader = new DBCommand(builder.ToString(), _sConnection).ExecuteReader())
-                result = reader.ReadEntity(table);
+            var result = ExecuteNonQuery("INSERT INTO {0}\n(\n  {1}\n) VALUES (\n  {2}\n)", table.Name, columns, values);
 
-            var auto = table.Columns.Where(x => x.AutoIncrement).ToArray();
-            if (auto.Length == 0) return;
+            var auto = table.Columns.FirstOrDefault(x => x.AutoIncrement && x.PrimaryKey);
+            if (auto == null) return result;
 
-            foreach (var col in auto) {
-                col.SetValue(entity, col.GetValue(result));
-            }
+            var cmd = new DBCommand("SELECT @@IDENTITY AS ID");
+            var res = cmd.ExecuteScalar();
+
+            auto.SetValue(entity, Convert.ToInt32(res));
+
+            return result;
         }
 
         public static int Update<T>(T entity)
