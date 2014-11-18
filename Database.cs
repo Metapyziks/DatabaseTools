@@ -94,7 +94,7 @@ namespace DatabaseTools
             //            DropDatabase();
             //#endif
 
-            if (!File.Exists(FileName))
+            if (!File.Exists(FileName.Replace("|DataDirectory|", (String) AppDomain.CurrentDomain.GetData("DataDirectory"))))
                 CreateDatabase("Data Source={0};", FileName);
             else
                 Connect("Data Source={0};", FileName);
