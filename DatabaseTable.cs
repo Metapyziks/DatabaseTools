@@ -84,14 +84,14 @@ namespace DatabaseTools
 
         public void Drop()
         {
-            Console.WriteLine("  Dropping table {0}...", Name);
+            Database.Log("  Dropping table {0}...", Name);
             Database.DeleteAll(_type);
             Database.ExecuteNonQuery("DROP TABLE {0}", Name);
         }
 
         public void Create()
         {
-            Console.WriteLine("  Creating table {0}...", Name);
+            Database.Log("  Creating table {0}...", Name);
             Database.ExecuteNonQuery(GenerateDefinitionStatement());
         }
 

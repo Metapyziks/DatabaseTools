@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Reflection;
 using System.IO;
 using System.Linq.Expressions;
+using System.Diagnostics;
 
 #if LINUX
     using DBConnection = Mono.Data.Sqlite.SqliteConnection;
@@ -20,8 +21,52 @@ using System.Linq.Expressions;
 
 namespace DatabaseTools
 {
+    public class LoggedMessageEventArgs : EventArgs
+    {
+        public EventLogEntryType Type { get; private set; }
+        public String Message { get; private set; }
+
+        public LoggedMessageEventArgs(EventLogEntryType type, String message)
+        {
+            Message = message;
+            Type = type;
+        }
+    }
+
+    public delegate void LoggedMessageHandler(LoggedMessageEventArgs e);
+
     public static class Database
     {
+        public static event LoggedMessageHandler LoggedMessage;
+
+        public static bool VerboseLogging { get; set; }
+
+        internal static void Log(EventLogEntryType type, String format, params object[] args)
+        {
+            var message = args.Length == 0 ? format : String.Format(format, args);
+
+            if (LoggedMessage != null) {
+                LoggedMessage(new LoggedMessageEventArgs(type, message));
+            }
+        }
+
+        internal static void Log(Exception e)
+        {
+            Log(EventLogEntryType.Error, "{0}: {1}", e.Message, e.StackTrace);
+        }
+
+        internal static void Log(String format, params Object[] args)
+        {
+            Log(EventLogEntryType.Information, format, args);
+        }
+
+        internal static void LogVerbose(String format, params Object[] args)
+        {
+            if (!VerboseLogging) return;
+
+            Log(EventLogEntryType.Information, format, args);
+        }
+
         public static bool IsDefined<T>(this MemberInfo minfo, bool inherit = false)
             where T : Attribute
         {
@@ -55,7 +100,7 @@ namespace DatabaseTools
             if (_sConnection != null)
                 Disconnect();
 
-            Console.WriteLine("Establishing database connection...");
+            Log("Establishing database connection...");
             String connectionString = String.Format(connStrFormat, args);
             _sConnection = new DBConnection(connectionString);
             _sConnection.Open();
@@ -65,13 +110,7 @@ namespace DatabaseTools
             try {
                 types = Assembly.GetEntryAssembly().GetTypes();
             } catch (ReflectionTypeLoadException e) {
-                Console.ForegroundColor = ConsoleColor.Red;
-                foreach (var ex in e.LoaderExceptions) {
-                    Console.WriteLine(ex.ToString());
-                    Console.WriteLine(ex.StackTrace);
-                }
-                Console.ResetColor();
-
+                Log(e);
                 throw;
             }
 
@@ -79,7 +118,7 @@ namespace DatabaseTools
                 if (type.IsDefined<DatabaseEntityAttribute>()) {
                     DatabaseTable table = CreateTable(type);
                     table.BuildColumns();
-                    Console.WriteLine("- Initialized table {0}", table.Name);
+                    LogVerbose("- Initialized table {0}", table.Name);
                 }
             }
 
@@ -281,11 +320,7 @@ namespace DatabaseTools
         public static int ExecuteNonQuery(String format, params Object[] args)
         {
             var cmd = new DBCommand(String.Format(format, args), _sConnection);
-#if DEBUG
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine(cmd.CommandText);
-            Console.ResetColor();
-#endif
+            LogVerbose(cmd.CommandText);
             return cmd.ExecuteNonQuery();
         }
 
@@ -376,11 +411,7 @@ namespace DatabaseTools
                 builder.AppendFormat("ORDER BY {0}.{1} DESC\n", alias, table.Columns.First(x => x.PrimaryKey).Name);
             }
 
-#if DEBUG
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine(builder.ToString());
-            Console.ResetColor();
-#endif
+            LogVerbose(builder.ToString());
 
             return new DBCommand(builder.ToString(), _sConnection);
         }
@@ -410,11 +441,8 @@ namespace DatabaseTools
             builder.AppendFormat("WHERE {0}", String.Join("\n  OR ",
                 predicates.Select(x => SerializeExpression(x.Body))));
 
-#if DEBUG
-            Console.ForegroundColor = ConsoleColor.DarkGray;
-            Console.WriteLine(builder.ToString());
-            Console.ResetColor();
-#endif
+            LogVerbose(builder.ToString());
+
             return new DBCommand(builder.ToString(), _sConnection);
         }
 
