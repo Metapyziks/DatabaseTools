@@ -389,6 +389,10 @@ namespace DatabaseTools
             bool selectLast, params Expression<Func<T, bool>>[] predicates)
             where T : new()
         {
+            if (predicates.Length == 0) {
+                predicates = new Expression<Func<T, bool>>[] { x => true };
+            }
+
             for (int i = 1; i < predicates.Length; ++i)
                 if (predicates[i].Parameters[0].Name != predicates[0].Parameters[0].Name)
                     throw new Exception("All predicates must use the same parameter name");
