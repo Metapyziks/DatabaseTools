@@ -515,14 +515,31 @@ namespace DatabaseTools
         /// <param name="predicates">Predicates for the selected item to match</param>
         /// <returns>The first item that matches all given predicates, or null</returns>
         public static T SelectFirst<T>(params Expression<Func<T, bool>>[] predicates)
-            where T : new()
+            where T : class, new()
         {
             DatabaseTable table = GetTable<T>();
             DBCommand cmd = GenerateSelectCommand(table, false, predicates);
 
             T entity;
-            using (DBDataReader reader = cmd.ExecuteReader())
+            using (DBDataReader reader = cmd.ExecuteReader()) {
+                if (!reader.HasRows) return null;
                 entity = reader.ReadEntity<T>(table);
+            }
+
+            return entity;
+        }
+
+        public static T SelectLast<T>(params Expression<Func<T, bool>>[] predicates)
+            where T : class, new()
+        {
+            DatabaseTable table = GetTable<T>();
+            DBCommand cmd = GenerateSelectCommand(table, true, predicates);
+
+            T entity;
+            using (DBDataReader reader = cmd.ExecuteReader()) {
+                if (!reader.HasRows) return null;
+                entity = reader.ReadEntity<T>(table);
+            }
 
             return entity;
         }
@@ -532,8 +549,10 @@ namespace DatabaseTools
             DBCommand cmd = GenerateSelectCommand<Object>(table, true, x => true);
 
             Object entity;
-            using (DBDataReader reader = cmd.ExecuteReader())
+            using (DBDataReader reader = cmd.ExecuteReader()) {
+                if (!reader.HasRows) return null;
                 entity = reader.ReadEntity(table);
+            }
 
             return entity;
         }
