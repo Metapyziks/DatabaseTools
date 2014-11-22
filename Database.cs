@@ -678,7 +678,12 @@ namespace DatabaseTools
             var auto = table.Columns.FirstOrDefault(x => x.AutoIncrement && x.PrimaryKey);
             if (auto == null) return result;
 
+#if LINUX
+            var cmd = new DBCommand("SELECT last_insert_rowid()", _sConnection);
+#else
             var cmd = new DBCommand("SELECT @@IDENTITY AS ID", _sConnection);
+#endif
+            
             var res = cmd.ExecuteScalar();
 
             auto.SetValue(entity, Convert.ToInt32(res));
