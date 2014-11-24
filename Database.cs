@@ -650,7 +650,6 @@ namespace DatabaseTools
         }
 
         public static int Insert<T>(T entity)
-            where T : new()
         {
             return Insert(GetTable<T>(), entity);
         }

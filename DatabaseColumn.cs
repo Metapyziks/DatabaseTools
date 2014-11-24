@@ -50,7 +50,7 @@ namespace DatabaseTools
             if (ForeignKey) {
                 ForeignTables = (
                     _property.GetCustomAttributes(typeof(ForeignKeyAttribute), false).SelectMany(x =>
-                    ((ForeignKeyAttribute) x).ForeignEntityTypes.Select(y => Database.GetTable(y)))
+                    ((ForeignKeyAttribute) x).ForeignEntityTypes.Select(Database.GetTable))
                 ).ToArray();
             }
             if (super != null) {
