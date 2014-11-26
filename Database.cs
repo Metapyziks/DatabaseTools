@@ -526,7 +526,6 @@ namespace DatabaseTools
 
             T entity;
             using (DBDataReader reader = cmd.ExecuteReader()) {
-                if (!reader.HasRows) return null;
                 entity = reader.ReadEntity<T>(table);
             }
 
@@ -541,7 +540,6 @@ namespace DatabaseTools
 
             T entity;
             using (DBDataReader reader = cmd.ExecuteReader()) {
-                if (!reader.HasRows) return null;
                 entity = reader.ReadEntity<T>(table);
             }
 
@@ -554,7 +552,6 @@ namespace DatabaseTools
 
             Object entity;
             using (DBDataReader reader = cmd.ExecuteReader()) {
-                if (!reader.HasRows) return null;
                 entity = reader.ReadEntity(table);
             }
 
