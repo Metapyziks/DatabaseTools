@@ -3,7 +3,10 @@
 namespace DatabaseTools
 {
     [AttributeUsage(AttributeTargets.Class)]
-    public class DatabaseEntityAttribute : Attribute { }
+    public class DatabaseEntityAttribute : Attribute
+    {
+        public bool DropOnConnect { get; set; }
+    }
 
     [AttributeUsage(AttributeTargets.Property)]
     public class ColumnAttribute : Attribute { }

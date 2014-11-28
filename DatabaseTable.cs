@@ -12,6 +12,8 @@ namespace DatabaseTools
         public Type Type { get { return _type; } }
         public String Name { get { return _type.Name; } }
 
+        public bool DropOnConnect { get; private set; }
+
         public DatabaseTable SuperTable { get; private set; }
         public DatabaseColumn[] Columns { get; private set; }
 
@@ -20,6 +22,9 @@ namespace DatabaseTools
         public DatabaseTable(Type type)
         {
             _type = type;
+
+            var attrib = type.GetCustomAttribute<DatabaseEntityAttribute>();
+            if (attrib != null) DropOnConnect = attrib.DropOnConnect;
         }
 
         public bool ShouldInclude(PropertyInfo property)
@@ -41,7 +46,7 @@ namespace DatabaseTools
 
         internal void BuildColumns()
         {
-            int count = _type.GetProperties().Count(x => ShouldInclude(x));
+            int count = _type.GetProperties().Count(ShouldInclude);
             Columns = new DatabaseColumn[count];
 
             int i = 0;

@@ -115,16 +115,20 @@ namespace DatabaseTools
             }
 
             foreach (Type type in types) {
-                if (type.IsDefined<DatabaseEntityAttribute>()) {
-                    DatabaseTable table = CreateTable(type);
-                    table.BuildColumns();
-                    LogVerbose("- Initialized table {0}", table.Name);
-                }
+                if (!type.IsDefined<DatabaseEntityAttribute>()) continue;
+
+                DatabaseTable table = CreateTable(type);
+                table.BuildColumns();
+                LogVerbose("- Initialized table {0}", table.Name);
             }
 
             foreach (var table in _sTables) {
                 table.ResolveForeignKeys();
-                if (!TableExists(table)) {
+
+                if (table.DropOnConnect) {
+                    table.Drop();
+                    table.Create();
+                } else if (!TableExists(table)) {
                     table.Create();
                 }
             }
