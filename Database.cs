@@ -432,7 +432,7 @@ namespace DatabaseTools
             for (int i = 1; i < predicates.Length; ++i) {
                 if (predicates[i].Parameters[0].Name != predicates[0].Parameters[0].Name
                     || predicates[i].Parameters[1].Name != predicates[0].Parameters[1].Name) {
-                    throw new Exception("All predicates must use the same parameter name");
+                    throw new Exception("All predicates must use the same parameter names");
                 }
             }
 
@@ -468,8 +468,9 @@ namespace DatabaseTools
                 entity = table.Type.GetConstructor(new Type[] { }).Invoke(new Object[] { });
 
                 do {
+                    var index = 0;
                     foreach (DatabaseColumn col in table.Columns)
-                        col.SetValue(entity, reader[col.Name]);
+                        col.SetValue(entity, reader[index++]);
                 } while ((table = table.SuperTable) != null);
             }
 
@@ -485,11 +486,12 @@ namespace DatabaseTools
             if (reader.Read()) {
                 entity = new Tuple<T0, T1>(new T0(), new T1());
 
+                var index = 0;
                 foreach (DatabaseColumn col in table0.Columns)
-                    col.SetValue(entity.Item1, reader[col.Name]);
+                    col.SetValue(entity.Item1, reader[index++]);
 
                 foreach (DatabaseColumn col in table1.Columns)
-                    col.SetValue(entity.Item2, reader[col.Name]);
+                    col.SetValue(entity.Item2, reader[index++]);
             }
 
             return entity;
