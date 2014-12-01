@@ -228,6 +228,10 @@ namespace DatabaseTools
                     Expression<Func<int,String>> toString = x => x.ToString();
                     return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
+                } else if (exp.Type == typeof(long)) {
+                    Expression<Func<long,String>> toString = x => x.ToString();
+                    return FormatValue(Expression.Lambda<Func<String>>(
+                        Expression.Invoke(toString, exp)).Compile()());
                 } else if (exp.Type == typeof(ulong)) {
                     Expression<Func<ulong,String>> toString = x => x.ToString();
                     return FormatValue(Expression.Lambda<Func<String>>(
