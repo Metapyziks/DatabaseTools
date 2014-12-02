@@ -33,7 +33,7 @@ namespace DatabaseTools
 
             if (property.IsDefined<PrimaryKeyAttribute>()) return true;
 
-            Type super = _type.BaseType;
+            var super = _type.BaseType;
             while (super.IsDefined<DatabaseEntityAttribute>()) {
                 if (super.GetProperty(property.Name) != null) {
                     return false;
@@ -46,21 +46,21 @@ namespace DatabaseTools
 
         internal void BuildColumns()
         {
-            int count = _type.GetProperties().Count(ShouldInclude);
+            var count = _type.GetProperties().Count(ShouldInclude);
             Columns = new DatabaseColumn[count];
 
-            int i = 0;
-            foreach (PropertyInfo property in _type.GetProperties()) {
+            var i = 0;
+            foreach (var property in _type.GetProperties()) {
                 if (ShouldInclude(property)) {
                     Columns[i++] = new DatabaseColumn(property);
                 }
             }
 
-            foreach (MethodInfo method in _type.GetMethods()) {
-                if (method.IsDefined<CleanUpMethodAttribute>() && method.GetParameters().Length == 0) {
-                    CleanupMethod = method;
-                    break;
-                }
+            foreach (var method in _type.GetMethods()) {
+                if (!method.IsDefined<CleanUpMethodAttribute>() || method.GetParameters().Length != 0) continue;
+
+                CleanupMethod = method;
+                break;
             }
         }
 
@@ -77,9 +77,9 @@ namespace DatabaseTools
 
         public String GenerateDefinitionStatement()
         {
-            StringBuilder builder = new StringBuilder();
+            var builder = new StringBuilder();
             builder.AppendFormat("CREATE TABLE {0}\n(\n", Name);
-            for (int i = 0; i < Columns.Length; ++i) {
+            for (var i = 0; i < Columns.Length; ++i) {
                 builder.AppendFormat("  {0}{1}\n", Columns[i].GenerateDefinitionStatement(),
                     i < Columns.Length - 1 ? "," : "");
             }
@@ -90,7 +90,6 @@ namespace DatabaseTools
         public void Drop()
         {
             Database.Log("  Dropping table {0}...", Name);
-            Database.DeleteAll(_type);
             Database.ExecuteNonQuery("DROP TABLE {0}", Name);
         }
 

@@ -76,12 +76,9 @@ namespace DatabaseTools
         public static T GetCustomAttribute<T>(this MemberInfo minfo, bool inherit = false)
             where T : Attribute
         {
-            T[] attribs = (T[]) minfo.GetCustomAttributes(typeof(T), inherit);
+            var attribs = (T[]) minfo.GetCustomAttributes(typeof(T), inherit);
 
-            if (attribs.Length == 0)
-                return null;
-
-            return attribs[0];
+            return attribs.Length == 0 ? null : attribs[0];
         }
 
         public static CultureInfo CultureInfo = new CultureInfo("en-US");
@@ -114,10 +111,10 @@ namespace DatabaseTools
                 throw;
             }
 
-            foreach (Type type in types) {
+            foreach (var type in types) {
                 if (!type.IsDefined<DatabaseEntityAttribute>()) continue;
 
-                DatabaseTable table = CreateTable(type);
+                var table = CreateTable(type);
                 table.BuildColumns();
                 LogVerbose("- Initialized table {0}", table.Name);
             }
@@ -158,22 +155,16 @@ namespace DatabaseTools
         private static void CreateDatabase(String connStrFormat, params String[] args)
         {
 #if !LINUX
-            DBEngine engine = new DBEngine(String.Format(connStrFormat, args));
+            var engine = new DBEngine(String.Format(connStrFormat, args));
             engine.CreateDatabase();
             engine.Dispose();
 #endif
             Connect(connStrFormat, args);
         }
 
-        private static DatabaseTable CreateTable<T>()
-            where T : new()
-        {
-            return CreateTable(typeof(T));
-        }
-
         private static DatabaseTable CreateTable(Type type)
         {
-            DatabaseTable newTable = new DatabaseTable(type);
+            var newTable = new DatabaseTable(type);
             _sTables.Add(newTable);
             return newTable;
         }
@@ -184,18 +175,18 @@ namespace DatabaseTools
                 return RequiresParam(((UnaryExpression) exp).Operand);
 
             if (exp is BinaryExpression) {
-                BinaryExpression bExp = (BinaryExpression) exp;
+                var bExp = (BinaryExpression) exp;
                 return RequiresParam(bExp.Left) || RequiresParam(bExp.Right);
             }
 
             if (exp is MemberExpression) {
-                MemberExpression mExp = (MemberExpression) exp;
+                var mExp = (MemberExpression) exp;
                 return mExp.Expression != null && RequiresParam(mExp.Expression);
             }
 
             if (exp is MethodCallExpression) {
-                MethodCallExpression mcExp = (MethodCallExpression) exp;
-                return mcExp.Arguments.Any(x => RequiresParam(x));
+                var mcExp = (MethodCallExpression) exp;
+                return mcExp.Arguments.Any(RequiresParam);
             }
 
             if (exp is ParameterExpression)
@@ -209,8 +200,8 @@ namespace DatabaseTools
 
         public static String Escape(this String str)
         {
-            StringBuilder escaped = new StringBuilder();
-            foreach (char c in str) {
+            var escaped = new StringBuilder();
+            foreach (var c in str) {
                 if (c == '\'') escaped.Append("''");
                 else escaped.Append(c);
             }
@@ -224,34 +215,44 @@ namespace DatabaseTools
                     Expression<Func<bool,String>> toString = x => x ? "'1'='1'" : "'1'='0'";
                     return Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()();
-                } else if (exp.Type == typeof(int)) {
+                }
+
+                if (exp.Type == typeof(int)) {
                     Expression<Func<int,String>> toString = x => x.ToString();
                     return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
-                } else if (exp.Type == typeof(long)) {
+                }
+
+                if (exp.Type == typeof(long)) {
                     Expression<Func<long,String>> toString = x => x.ToString();
                     return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
-                } else if (exp.Type == typeof(ulong)) {
+                }
+
+                if (exp.Type == typeof(ulong)) {
                     Expression<Func<ulong,String>> toString = x => x.ToString();
                     return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
-                } else if (exp.Type == typeof(double)) {
+                }
+
+                if (exp.Type == typeof(double)) {
                     Expression<Func<double,String>> toString = x => x.ToString();
                     return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
-                } else if (exp.Type == typeof(DateTime)) {
+                }
+
+                if (exp.Type == typeof(DateTime)) {
                     Expression<Func<DateTime,String>> toString = x => x.Ticks.ToString();
                     return FormatValue(Expression.Lambda<Func<String>>(
                         Expression.Invoke(toString, exp)).Compile()());
-                } else {
-                    return FormatValue(Expression.Lambda<Func<Object>>(exp).Compile()());
                 }
+
+                return FormatValue(Expression.Lambda<Func<Object>>(exp).Compile()());
             }
 
             if (exp is UnaryExpression) {
-                UnaryExpression uExp = (UnaryExpression) exp;
-                String oper = SerializeExpression(uExp.Operand, removeParam);
+                var uExp = (UnaryExpression) exp;
+                var oper = SerializeExpression(uExp.Operand, removeParam);
 
                 switch (exp.NodeType) {
                     case ExpressionType.Not:
@@ -265,9 +266,9 @@ namespace DatabaseTools
             }
 
             if (exp is BinaryExpression) {
-                BinaryExpression bExp = (BinaryExpression) exp;
-                String left = SerializeExpression(bExp.Left, removeParam);
-                String right = SerializeExpression(bExp.Right, removeParam);
+                var bExp = (BinaryExpression) exp;
+                var left = SerializeExpression(bExp.Left, removeParam);
+                var right = SerializeExpression(bExp.Right, removeParam);
                 switch (exp.NodeType) {
                     case ExpressionType.Equal:
                         return String.Format("({0} = {1})", left, right);
@@ -300,28 +301,33 @@ namespace DatabaseTools
                     return FormatValue(cExp.Value);
                 case ExpressionType.MemberAccess:
                     var mExp = (MemberExpression) exp;
-                    if (removeParam && mExp.Expression is ParameterExpression)
+                    if (removeParam && mExp.Expression is ParameterExpression) {
                         return mExp.Member.Name;
-                    if (mExp.Expression is ParameterExpression) {
-                        var param = (ParameterExpression) mExp.Expression;
+                    }
+
+                    var expression = mExp.Expression as ParameterExpression;
+                    if (expression != null) {
+                        var param = expression;
                         var paramName = param.Name;
+                        
                         DatabaseTable table = GetTable(param.Type);
-                        if (!table.Columns.Any(x => x.Name == mExp.Member.Name)) {
-                            while ((table = table.SuperTable) != null) {
-                                if (table.Columns.Any(x => x.Name == mExp.Member.Name)) {
-                                    paramName = table.Name;
-                                    break;
-                                }
-                            }
+                        if (table.Columns.Any(x => x.Name == mExp.Member.Name)) {
+                            return String.Format("{0}.{1}", paramName, mExp.Member.Name);
                         }
+
+                        while ((table = table.SuperTable) != null) {
+                            if (table.Columns.All(x => x.Name != mExp.Member.Name)) continue;
+                            paramName = table.Name;
+                            break;
+                        }
+
                         return String.Format("{0}.{1}", paramName, mExp.Member.Name);
                     }
                     return String.Format("{0}.{1}", SerializeExpression(
                             mExp.Expression, removeParam),
                         mExp.Member.Name);
                 default:
-                    throw new Exception("Cannot convert an expression of type "
-                        + exp.NodeType + " to SQL");
+                    throw new Exception("Cannot convert an expression of type " + exp.NodeType + " to SQL");
             }
         }
 
@@ -459,31 +465,41 @@ namespace DatabaseTools
         }
 
         private static T ReadEntity<T>(this DBDataReader reader, DatabaseTable table)
-            where T : new()
+            where T : class, new()
         {
-            return (T) ReadEntity(reader, table);
-        }
+            if (!reader.Read()) return null;
 
-        private static Object ReadEntity(this DBDataReader reader, DatabaseTable table)
-        {
-            Object entity = null;
+            var entity = new T();
 
-            if (reader.Read()) {
-                entity = table.Type.GetConstructor(new Type[] { }).Invoke(new Object[] { });
-
-                do {
-                    var index = 0;
-                    foreach (DatabaseColumn col in table.Columns)
-                        col.SetValue(entity, reader[index++]);
-                } while ((table = table.SuperTable) != null);
-            }
+            do {
+                var index = 0;
+                foreach (var col in table.Columns)
+                    col.SetValue(entity, reader[index++]);
+            } while ((table = table.SuperTable) != null);
 
             return entity;
         }
 
+        //private static Object ReadEntity(this DBDataReader reader, DatabaseTable table)
+        //{
+        //    Object entity = null;
+
+        //    if (!reader.Read()) return entity;
+
+        //    entity = table.Type.GetConstructor(new Type[0]).Invoke(new Object[] { });
+
+        //    do {
+        //        var index = 0;
+        //        foreach (var col in table.Columns)
+        //            col.SetValue(entity, reader[index++]);
+        //    } while ((table = table.SuperTable) != null);
+
+        //    return entity;
+        //}
+
         private static Tuple<T0, T1> ReadEntity<T0, T1>(this DBDataReader reader, DatabaseTable table0, DatabaseTable table1)
-            where T0 : new()
-            where T1 : new()
+            where T0 : class, new()
+            where T1 : class, new()
         {
             Tuple<T0, T1> entity = null;
 
@@ -491,10 +507,10 @@ namespace DatabaseTools
                 entity = new Tuple<T0, T1>(new T0(), new T1());
 
                 var index = 0;
-                foreach (DatabaseColumn col in table0.Columns)
+                foreach (var col in table0.Columns)
                     col.SetValue(entity.Item1, reader[index++]);
 
-                foreach (DatabaseColumn col in table1.Columns)
+                foreach (var col in table1.Columns)
                     col.SetValue(entity.Item2, reader[index++]);
             }
 
@@ -531,11 +547,11 @@ namespace DatabaseTools
         public static T SelectFirst<T>(params Expression<Func<T, bool>>[] predicates)
             where T : class, new()
         {
-            DatabaseTable table = GetTable<T>();
-            DBCommand cmd = GenerateSelectCommand(table, false, predicates);
+            var table = GetTable<T>();
+            var cmd = GenerateSelectCommand(table, false, predicates);
 
             T entity;
-            using (DBDataReader reader = cmd.ExecuteReader()) {
+            using (var reader = cmd.ExecuteReader()) {
                 entity = reader.ReadEntity<T>(table);
             }
 
@@ -545,24 +561,17 @@ namespace DatabaseTools
         public static T SelectLast<T>(params Expression<Func<T, bool>>[] predicates)
             where T : class, new()
         {
-            DatabaseTable table = GetTable<T>();
-            DBCommand cmd = GenerateSelectCommand(table, true, predicates);
-
-            T entity;
-            using (DBDataReader reader = cmd.ExecuteReader()) {
-                entity = reader.ReadEntity<T>(table);
-            }
-
-            return entity;
+            return SelectLast(GetTable(typeof (T)), predicates);
         }
 
-        private static Object SelectLast(DatabaseTable table)
+        private static T SelectLast<T>(DatabaseTable table, params Expression<Func<T, bool>>[] predicates)
+            where T : class, new()
         {
-            DBCommand cmd = GenerateSelectCommand<Object>(table, true, x => true);
+            var cmd = GenerateSelectCommand(table, true, predicates);
 
-            Object entity;
-            using (DBDataReader reader = cmd.ExecuteReader()) {
-                entity = reader.ReadEntity(table);
+            T entity;
+            using (var reader = cmd.ExecuteReader()) {
+                entity = reader.ReadEntity<T>(table);
             }
 
             return entity;
@@ -574,33 +583,32 @@ namespace DatabaseTools
         /// </summary>
         /// <typeparam name="T0">Entity type of the first table to select from</typeparam>
         /// <typeparam name="T1">Entity type of the second table to select from</typeparam>
-        /// <param name="predicates">Predicates for the </param>
-        /// <returns></returns>
-        public static Tuple<T0, T1> SelectFirst<T0, T1>(Expression<Func<T0, T1, bool>> joinOn, params Expression<Func<T0, T1, bool>>[] predicates)
-            where T0 : new()
-            where T1 : new()
+        public static Tuple<T0, T1> SelectFirst<T0, T1>(Expression<Func<T0, T1, bool>> joinOn,
+            params Expression<Func<T0, T1, bool>>[] predicates)
+            where T0 : class, new()
+            where T1 : class, new()
         {
             var table0 = GetTable<T0>();
             var table1 = GetTable<T1>();
             var cmd = GenerateSelectCommand(table0, table1, joinOn, predicates);
 
             Tuple<T0, T1> entity;
-            using (DBDataReader reader = cmd.ExecuteReader())
+            using (var reader = cmd.ExecuteReader())
                 entity = reader.ReadEntity<T0, T1>(table0, table1);
 
             return entity;
         }
 
         public static List<T> Select<T>(params Expression<Func<T, bool>>[] predicates)
-            where T : new()
+            where T : class, new()
         {
             if (predicates.Length == 0) return new List<T>();
 
-            DatabaseTable table = GetTable<T>();
-            DBCommand cmd = GenerateSelectCommand(table, false, predicates);
+            var table = GetTable<T>();
+            var cmd = GenerateSelectCommand(table, false, predicates);
 
             var entities = new List<T>();
-            using (DBDataReader reader = cmd.ExecuteReader()) {
+            using (var reader = cmd.ExecuteReader()) {
                 T entity;
                 while ((entity = reader.ReadEntity<T>(table)) != null)
                     entities.Add(entity);
@@ -610,8 +618,8 @@ namespace DatabaseTools
         }
 
         public static List<Tuple<T0, T1>> Select<T0, T1>(Expression<Func<T0, T1, bool>> joinOn, params Expression<Func<T0, T1, bool>>[] predicates)
-            where T0 : new()
-            where T1 : new()
+            where T0 : class, new()
+            where T1 : class, new()
         {
             if (predicates.Length == 0) return new List<Tuple<T0, T1>>();
 
@@ -620,7 +628,7 @@ namespace DatabaseTools
             var cmd = GenerateSelectCommand(table0, table1, joinOn, predicates);
 
             var entities = new List<Tuple<T0, T1>>();
-            using (DBDataReader reader = cmd.ExecuteReader()) {
+            using (var reader = cmd.ExecuteReader()) {
                 Tuple<T0, T1> entity;
                 while ((entity = reader.ReadEntity<T0, T1>(table0, table1)) != null)
                     entities.Add(entity);
@@ -630,38 +638,26 @@ namespace DatabaseTools
         }
 
         public static List<T> SelectAll<T>()
-            where T : new()
+            where T : class, new()
         {
             return Select<T>(x => true);
         }
 
-        private static IEnumerable<object> SelectAll(DatabaseTable table)
-        {
-            var cmd = GenerateSelectCommand<Object>(table, false, x => true);
-
-            var entities = new List<Object>();
-            using (var reader = cmd.ExecuteReader()) {
-                Object entity;
-                while ((entity = reader.ReadEntity(table)) != null)
-                    entities.Add(entity);
-            }
-
-            return entities;
-        }
-
         public static List<Tuple<T0, T1>> SelectAll<T0, T1>(Expression<Func<T0, T1, bool>> joinOn)
-            where T0 : new()
-            where T1 : new()
+            where T0 : class, new()
+            where T1 : class, new()
         {
             return Select(joinOn, (x, y) => true);
         }
 
         public static int Insert<T>(T entity)
+            where T : class, new()
         {
             return Insert(GetTable<T>(), entity);
         }
 
-        private static int Insert(DatabaseTable table, Object entity)
+        private static int Insert<T>(DatabaseTable table, T entity)
+            where T : class, new()
         {
             if (table.SuperTable != null) {
                 Insert(table.SuperTable, entity);
@@ -671,7 +667,7 @@ namespace DatabaseTools
                         x, table.SuperTable.Columns.First(y => y.Name == x.Name)));
 
                 if (inherited.Any()) {
-                    var super = SelectLast(table.SuperTable);
+                    var super = SelectLast<T>(table.SuperTable);
                     foreach (var pair in inherited) {
                         pair.Item1.SetValue(entity, pair.Item2.GetValue(super));
                     }
@@ -711,16 +707,16 @@ namespace DatabaseTools
         {
             if (table.SuperTable != null) Update(table.SuperTable, entity);
 
-            DatabaseColumn primaryKey = table.Columns.First(x => x.PrimaryKey);
+            var primaryKey = table.Columns.First(x => x.PrimaryKey);
 
-            IEnumerable<DatabaseColumn> valid = table.Columns.Where(x => x != primaryKey);
+            var valid = table.Columns.Where(x => x != primaryKey);
 
-            String columns = String.Join(",\n  ", valid.Select(x =>
+            var columns = String.Join(",\n  ", valid.Select(x =>
                 String.Format("{0} = {1}", x.Name, FormatValue(x.GetValue(entity)))));
 
-            String predicate = String.Format("{0} = {1}", primaryKey.Name, FormatValue(primaryKey.GetValue(entity)));
+            var predicate = String.Format("{0} = {1}", primaryKey.Name, FormatValue(primaryKey.GetValue(entity)));
 
-            StringBuilder builder = new StringBuilder();
+            var builder = new StringBuilder();
             builder.AppendFormat("UPDATE {0} SET\n  {1}\nWHERE {2}",
                 table.Name, columns, predicate);
 
@@ -735,9 +731,9 @@ namespace DatabaseTools
         }
 
         public static int Delete<T>(params Expression<Func<T, bool>>[] predicates)
-            where T : new()
+            where T : class, new()
         {
-            return Delete<T>(Select<T>(predicates));
+            return Delete<T>(Select(predicates));
         }
 
         public static int Delete<T>(IEnumerable<T> entities)
@@ -745,37 +741,20 @@ namespace DatabaseTools
         {
             if (!entities.Any()) return 0;
 
-            DatabaseTable table = GetTable<T>();
-            DatabaseColumn primaryKey = table.Columns.First(x => x.PrimaryKey);
+            var table = GetTable<T>();
+            var primaryKey = table.Columns.First(x => x.PrimaryKey);
 
-            String predicate = String.Join("\n  OR ", entities.Select(x => String.Format("{0} = {1}",
+            var predicate = String.Join("\n  OR ", entities.Select(x => String.Format("{0} = {1}",
                 primaryKey.Name, FormatValue(primaryKey.GetValue(x)))));
 
-            StringBuilder builder = new StringBuilder();
+            var builder = new StringBuilder();
             builder.AppendFormat("DELETE FROM {0} WHERE {1}",
                 table.Name, predicate);
 
-            if (table.CleanupMethod != null) {
-                foreach (var ent in entities) {
-                    table.CleanupMethod.Invoke(ent, new Object[0]);
-                }
-            }
+            if (table.CleanupMethod == null) return ExecuteNonQuery(builder.ToString());
 
-            return ExecuteNonQuery(builder.ToString());
-        }
-
-        internal static int DeleteAll(Type t)
-        {
-            DatabaseTable table = GetTable(t);
-
-            StringBuilder builder = new StringBuilder();
-            builder.AppendFormat("DELETE FROM {0} ", table.Name);
-            builder.Append("WHERE '1' = '1'");
-
-            if (table.CleanupMethod != null) {
-                foreach (var ent in SelectAll(table)) {
-                    table.CleanupMethod.Invoke(ent, new Object[0]);
-                }
+            foreach (var ent in entities) {
+                table.CleanupMethod.Invoke(ent, new Object[0]);
             }
 
             return ExecuteNonQuery(builder.ToString());
