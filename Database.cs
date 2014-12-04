@@ -439,9 +439,9 @@ namespace DatabaseTools
             where T0 : new()
             where T1 : new()
         {
-            for (int i = 1; i < predicates.Length; ++i) {
-                if (predicates[i].Parameters[0].Name != predicates[0].Parameters[0].Name
-                    || predicates[i].Parameters[1].Name != predicates[0].Parameters[1].Name) {
+            for (var i = 0; i < predicates.Length; ++i) {
+                if (predicates[i].Parameters[0].Name != joinOn.Parameters[0].Name
+                    || predicates[i].Parameters[1].Name != joinOn.Parameters[1].Name) {
                     throw new Exception("All predicates must use the same parameter names");
                 }
             }
@@ -455,6 +455,43 @@ namespace DatabaseTools
             var builder = new StringBuilder();
             builder.AppendFormat("SELECT\n  {0}\nFROM {1} AS {2}\nINNER JOIN {3} AS {4}\nON {5}\n", columns,
                 table0.Name, alias0, table1.Name, alias1, SerializeExpression(joinOn.Body));
+
+            builder.AppendFormat("WHERE {0}", String.Join("\n  OR ",
+                predicates.Select(x => SerializeExpression(x.Body))));
+
+            LogVerbose(builder.ToString());
+
+            return new DBCommand(builder.ToString(), _sConnection);
+        }
+
+        private static DBCommand GenerateSelectCommand<T0, T1, T2>(DatabaseTable table0, DatabaseTable table1,
+            DatabaseTable table2, Expression<Func<T0, T1, bool>> joinOn0, Expression<Func<T1, T2, bool>> joinOn1,
+            params Expression<Func<T0, T1, T2, bool>>[] predicates)
+            where T0 : new()
+            where T1 : new()
+            where T2 : new()
+        {
+            if (joinOn0.Parameters[1].Name != joinOn1.Parameters[0].Name ||
+                predicates.Any(x => x.Parameters[0].Name != joinOn0.Parameters[0].Name
+                    || x.Parameters[1].Name != joinOn0.Parameters[1].Name
+                    || x.Parameters[2].Name != joinOn1.Parameters[1].Name)) {
+                throw new Exception("All predicates must use the same parameter names");
+            }
+
+            var alias0 = predicates[0].Parameters[0].Name;
+            var alias1 = predicates[0].Parameters[1].Name;
+            var alias2 = predicates[0].Parameters[2].Name;
+
+            var columns = String.Join(",\n  ", table0.Columns.Select(x => alias0 + "." + x.Name))
+                + ",\n  " + String.Join(",\n  ", table1.Columns.Select(x => alias1 + "." + x.Name))
+                + ",\n  " + String.Join(",\n  ", table2.Columns.Select(x => alias1 + "." + x.Name));
+
+            var builder = new StringBuilder();
+            builder.AppendFormat("SELECT\n  {0}\nFROM {1} AS {2}\n", columns,
+                table0.Name, alias0);
+
+            builder.AppendFormat("INNER JOIN {0} AS {1}\nON {2}\n", table1.Name, alias1, SerializeExpression(joinOn0.Body));
+            builder.AppendFormat("INNER JOIN {0} AS {1}\nON {2}\n", table2.Name, alias2, SerializeExpression(joinOn1.Body));
 
             builder.AppendFormat("WHERE {0}", String.Join("\n  OR ",
                 predicates.Select(x => SerializeExpression(x.Body))));
@@ -480,39 +517,44 @@ namespace DatabaseTools
             return entity;
         }
 
-        //private static Object ReadEntity(this DBDataReader reader, DatabaseTable table)
-        //{
-        //    Object entity = null;
-
-        //    if (!reader.Read()) return entity;
-
-        //    entity = table.Type.GetConstructor(new Type[0]).Invoke(new Object[] { });
-
-        //    do {
-        //        var index = 0;
-        //        foreach (var col in table.Columns)
-        //            col.SetValue(entity, reader[index++]);
-        //    } while ((table = table.SuperTable) != null);
-
-        //    return entity;
-        //}
-
-        private static Tuple<T0, T1> ReadEntity<T0, T1>(this DBDataReader reader, DatabaseTable table0, DatabaseTable table1)
+        private static Tuple<T0, T1> ReadEntity<T0, T1>(this DBDataReader reader,
+            DatabaseTable table0, DatabaseTable table1)
             where T0 : class, new()
             where T1 : class, new()
         {
-            Tuple<T0, T1> entity = null;
+            if (!reader.Read()) return null;
 
-            if (reader.Read()) {
-                entity = new Tuple<T0, T1>(new T0(), new T1());
+            var entity = new Tuple<T0, T1>(new T0(), new T1());
 
-                var index = 0;
-                foreach (var col in table0.Columns)
-                    col.SetValue(entity.Item1, reader[index++]);
+            var index = 0;
+            foreach (var col in table0.Columns)
+                col.SetValue(entity.Item1, reader[index++]);
 
-                foreach (var col in table1.Columns)
-                    col.SetValue(entity.Item2, reader[index++]);
-            }
+            foreach (var col in table1.Columns)
+                col.SetValue(entity.Item2, reader[index++]);
+
+            return entity;
+        }
+
+        private static Tuple<T0, T1, T2> ReadEntity<T0, T1, T2>(this DBDataReader reader,
+            DatabaseTable table0, DatabaseTable table1, DatabaseTable table2)
+            where T0 : class, new()
+            where T1 : class, new()
+            where T2 : class, new()
+        {
+            if (!reader.Read()) return null;
+
+            var entity = new Tuple<T0, T1, T2>(new T0(), new T1(), new T2());
+
+            var index = 0;
+            foreach (var col in table0.Columns)
+                col.SetValue(entity.Item1, reader[index++]);
+
+            foreach (var col in table1.Columns)
+                col.SetValue(entity.Item2, reader[index++]);
+
+            foreach (var col in table2.Columns)
+                col.SetValue(entity.Item3, reader[index++]);
 
             return entity;
         }
@@ -637,6 +679,30 @@ namespace DatabaseTools
             return entities;
         }
 
+        public static List<Tuple<T0, T1, T2>> Select<T0, T1, T2>(Expression<Func<T0, T1, bool>> joinOn0,
+            Expression<Func<T1, T2, bool>> joinOn1, params Expression<Func<T0, T1, T2, bool>>[] predicates)
+            where T0 : class, new()
+            where T1 : class, new()
+            where T2 : class, new()
+        {
+            if (predicates.Length == 0) return new List<Tuple<T0, T1, T2>>();
+
+            var table0 = GetTable<T0>();
+            var table1 = GetTable<T1>();
+            var table2 = GetTable<T2>();
+
+            var cmd = GenerateSelectCommand(table0, table1, table2, joinOn0, joinOn1, predicates);
+
+            var entities = new List<Tuple<T0, T1, T2>>();
+            using (var reader = cmd.ExecuteReader()) {
+                Tuple<T0, T1, T2> entity;
+                while ((entity = reader.ReadEntity<T0, T1, T2>(table0, table1, table2)) != null)
+                    entities.Add(entity);
+            }
+
+            return entities;
+        }
+
         public static List<T> SelectAll<T>()
             where T : class, new()
         {
@@ -648,6 +714,15 @@ namespace DatabaseTools
             where T1 : class, new()
         {
             return Select(joinOn, (x, y) => true);
+        }
+
+        public static List<Tuple<T0, T1, T2>> SelectAll<T0, T1, T2>(Expression<Func<T0, T1, bool>> joinOn0,
+            Expression<Func<T1, T2, bool>> joinOn1)
+            where T0 : class, new()
+            where T1 : class, new()
+            where T2 : class, new()
+        {
+            return Select(joinOn0, joinOn1, (x, y, z) => true);
         }
 
         public static int Insert<T>(T entity)
