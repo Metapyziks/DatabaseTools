@@ -484,7 +484,7 @@ namespace DatabaseTools
 
             var columns = String.Join(",\n  ", table0.Columns.Select(x => alias0 + "." + x.Name))
                 + ",\n  " + String.Join(",\n  ", table1.Columns.Select(x => alias1 + "." + x.Name))
-                + ",\n  " + String.Join(",\n  ", table2.Columns.Select(x => alias1 + "." + x.Name));
+                + ",\n  " + String.Join(",\n  ", table2.Columns.Select(x => alias2 + "." + x.Name));
 
             var builder = new StringBuilder();
             builder.AppendFormat("SELECT\n  {0}\nFROM {1} AS {2}\n", columns,
