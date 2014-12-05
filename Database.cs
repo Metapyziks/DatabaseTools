@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.SqlServerCe;
 using System.Linq;
 using System.Text;
 using System.Globalization;
@@ -169,6 +170,11 @@ namespace DatabaseTools
             return newTable;
         }
 
+        private static DBCommand CreateCommand()
+        {
+            return new SqlCeCommand {Connection = _sConnection};
+        }
+
         private static bool RequiresParam(Expression exp)
         {
             if (exp is UnaryExpression)
@@ -198,67 +204,31 @@ namespace DatabaseTools
             throw new Exception("Cannot reduce an expression of type " + exp.GetType());
         }
 
-        public static String Escape(this String str)
+        private static String SerializeValue(DBCommand cmd, Object value)
         {
-            var escaped = new StringBuilder();
-            foreach (var c in str) {
-                if (c == '\'') escaped.Append("''");
-                else escaped.Append(c);
-            }
-            return escaped.ToString();
+            var name = "@Param" + cmd.Parameters.Count;
+            var param = new SqlCeParameter(name, value ?? DBNull.Value);
+
+            cmd.Parameters.Add(param);
+
+            return name;
         }
 
-        private static String SerializeExpression(Expression exp, bool removeParam = false)
+        private static String SerializeExpression(DBCommand cmd, Expression exp, bool removeParam = false)
         {
             if (!RequiresParam(exp)) {
-                if (exp.Type == typeof(bool)) {
-                    Expression<Func<bool,String>> toString = x => x ? "'1'='1'" : "'1'='0'";
-                    return Expression.Lambda<Func<String>>(
-                        Expression.Invoke(toString, exp)).Compile()();
-                }
-
-                if (exp.Type == typeof(int)) {
-                    Expression<Func<int,String>> toString = x => x.ToString();
-                    return FormatValue(Expression.Lambda<Func<String>>(
-                        Expression.Invoke(toString, exp)).Compile()());
-                }
-
-                if (exp.Type == typeof(long)) {
-                    Expression<Func<long,String>> toString = x => x.ToString();
-                    return FormatValue(Expression.Lambda<Func<String>>(
-                        Expression.Invoke(toString, exp)).Compile()());
-                }
-
-                if (exp.Type == typeof(ulong)) {
-                    Expression<Func<ulong,String>> toString = x => x.ToString();
-                    return FormatValue(Expression.Lambda<Func<String>>(
-                        Expression.Invoke(toString, exp)).Compile()());
-                }
-
-                if (exp.Type == typeof(double)) {
-                    Expression<Func<double,String>> toString = x => x.ToString();
-                    return FormatValue(Expression.Lambda<Func<String>>(
-                        Expression.Invoke(toString, exp)).Compile()());
-                }
-
-                if (exp.Type == typeof(DateTime)) {
-                    Expression<Func<DateTime,String>> toString = x => x.Ticks.ToString();
-                    return FormatValue(Expression.Lambda<Func<String>>(
-                        Expression.Invoke(toString, exp)).Compile()());
-                }
-
-                return FormatValue(Expression.Lambda<Func<Object>>(exp).Compile()());
+                return SerializeValue(cmd, Expression.Lambda<Func<Object>>(exp).Compile()());
             }
 
             if (exp is UnaryExpression) {
                 var uExp = (UnaryExpression) exp;
-                var oper = SerializeExpression(uExp.Operand, removeParam);
+                var oper = SerializeExpression(cmd, uExp.Operand, removeParam);
 
                 switch (exp.NodeType) {
                     case ExpressionType.Not:
                         return String.Format("(NOT {0})", oper);
                     case ExpressionType.Convert:
-                        return SerializeExpression(uExp.Operand, removeParam);
+                        return SerializeExpression(cmd, uExp.Operand, removeParam);
                     default:
                         throw new Exception("Cannot convert an expression of type "
                             + exp.NodeType + " to SQL");
@@ -267,8 +237,8 @@ namespace DatabaseTools
 
             if (exp is BinaryExpression) {
                 var bExp = (BinaryExpression) exp;
-                var left = SerializeExpression(bExp.Left, removeParam);
-                var right = SerializeExpression(bExp.Right, removeParam);
+                var left = SerializeExpression(cmd, bExp.Left, removeParam);
+                var right = SerializeExpression(cmd, bExp.Right, removeParam);
                 switch (exp.NodeType) {
                     case ExpressionType.Equal:
                         return String.Format("({0} = {1})", left, right);
@@ -298,7 +268,7 @@ namespace DatabaseTools
                     return pExp.Name;
                 case ExpressionType.Constant:
                     var cExp = (ConstantExpression) exp;
-                    return FormatValue(cExp.Value);
+                    return SerializeValue(cmd, cExp.Value);
                 case ExpressionType.MemberAccess:
                     var mExp = (MemberExpression) exp;
                     if (removeParam && mExp.Expression is ParameterExpression) {
@@ -323,8 +293,7 @@ namespace DatabaseTools
 
                         return String.Format("{0}.{1}", paramName, mExp.Member.Name);
                     }
-                    return String.Format("{0}.{1}", SerializeExpression(
-                            mExp.Expression, removeParam),
+                    return String.Format("{0}.{1}", SerializeExpression(cmd, mExp.Expression, removeParam),
                         mExp.Member.Name);
                 default:
                     throw new Exception("Cannot convert an expression of type " + exp.NodeType + " to SQL");
@@ -378,12 +347,6 @@ namespace DatabaseTools
             }
         }
 
-        private static String FormatValue(Object value)
-        {
-            if (value == null) return "NULL";
-            return String.Format("'{0}'", value.ToString().Escape());
-        }
-
         private static void GenerateTableDependencies(DatabaseTable table, String alias, List<String> from, List<String> columns)
         {
             columns.AddRange(table.Columns.Select(x => alias + "." + x.Name));
@@ -407,23 +370,25 @@ namespace DatabaseTools
                 predicates = new Expression<Func<T, bool>>[] { x => true };
             }
 
-            for (int i = 1; i < predicates.Length; ++i)
+            for (var i = 1; i < predicates.Length; ++i)
                 if (predicates[i].Parameters[0].Name != predicates[0].Parameters[0].Name)
                     throw new Exception("All predicates must use the same parameter name");
 
-            String alias = predicates[0].Parameters[0].Name;
+            var alias = predicates[0].Parameters[0].Name;
 
             var from = new List<String>();
             var columns = new List<String>();
 
             GenerateTableDependencies(table, alias, from, columns);
 
-            StringBuilder builder = new StringBuilder();
+            var cmd = CreateCommand();
+
+            var builder = new StringBuilder();
             builder.AppendFormat("SELECT\n  {0}\nFROM {1}\n", String.Join(", ", columns),
                 String.Join("\n  ", from));
 
             builder.AppendFormat("WHERE {0}\n", String.Join("\n  OR ",
-                predicates.Select(x => SerializeExpression(x.Body))));
+                predicates.Select(x => SerializeExpression(cmd, x.Body))));
 
             if (selectLast) {
                 builder.AppendFormat("ORDER BY {0}.{1} DESC\n", alias, table.Columns.First(x => x.PrimaryKey).Name);
@@ -431,7 +396,8 @@ namespace DatabaseTools
 
             LogVerbose(builder.ToString());
 
-            return new DBCommand(builder.ToString(), _sConnection);
+            cmd.CommandText = builder.ToString();
+            return cmd;
         }
 
         private static DBCommand GenerateSelectCommand<T0, T1>(DatabaseTable table0,
@@ -452,16 +418,19 @@ namespace DatabaseTools
             var columns = String.Join(",\n  ", table0.Columns.Select(x => alias0 + "." + x.Name))
                 + ",\n  " + String.Join(",\n  ", table1.Columns.Select(x => alias1 + "." + x.Name));
 
+            var cmd = CreateCommand();
+
             var builder = new StringBuilder();
             builder.AppendFormat("SELECT\n  {0}\nFROM {1} AS {2}\nINNER JOIN {3} AS {4}\nON {5}\n", columns,
-                table0.Name, alias0, table1.Name, alias1, SerializeExpression(joinOn.Body));
+                table0.Name, alias0, table1.Name, alias1, SerializeExpression(cmd, joinOn.Body));
 
             builder.AppendFormat("WHERE {0}", String.Join("\n  OR ",
-                predicates.Select(x => SerializeExpression(x.Body))));
+                predicates.Select(x => SerializeExpression(cmd, x.Body))));
 
             LogVerbose(builder.ToString());
 
-            return new DBCommand(builder.ToString(), _sConnection);
+            cmd.CommandText = builder.ToString();
+            return cmd;
         }
 
         private static DBCommand GenerateSelectCommand<T0, T1, T2>(DatabaseTable table0, DatabaseTable table1,
@@ -486,19 +455,22 @@ namespace DatabaseTools
                 + ",\n  " + String.Join(",\n  ", table1.Columns.Select(x => alias1 + "." + x.Name))
                 + ",\n  " + String.Join(",\n  ", table2.Columns.Select(x => alias2 + "." + x.Name));
 
+            var cmd = CreateCommand();
+
             var builder = new StringBuilder();
             builder.AppendFormat("SELECT\n  {0}\nFROM {1} AS {2}\n", columns,
                 table0.Name, alias0);
 
-            builder.AppendFormat("INNER JOIN {0} AS {1}\nON {2}\n", table1.Name, alias1, SerializeExpression(joinOn0.Body));
-            builder.AppendFormat("INNER JOIN {0} AS {1}\nON {2}\n", table2.Name, alias2, SerializeExpression(joinOn1.Body));
+            builder.AppendFormat("INNER JOIN {0} AS {1}\nON {2}\n", table1.Name, alias1, SerializeExpression(cmd, joinOn0.Body));
+            builder.AppendFormat("INNER JOIN {0} AS {1}\nON {2}\n", table2.Name, alias2, SerializeExpression(cmd, joinOn1.Body));
 
             builder.AppendFormat("WHERE {0}", String.Join("\n  OR ",
-                predicates.Select(x => SerializeExpression(x.Body))));
+                predicates.Select(x => SerializeExpression(cmd, x.Body))));
 
             LogVerbose(builder.ToString());
 
-            return new DBCommand(builder.ToString(), _sConnection);
+            cmd.CommandText = builder.ToString();
+            return cmd;
         }
 
         private static T ReadEntity<T>(this DBDataReader reader, DatabaseTable table)
@@ -738,8 +710,7 @@ namespace DatabaseTools
                 Insert(table.SuperTable, entity);
                 var inherited = table.Columns.Where(x => !x.AutoIncrement
                     && table.SuperTable.Columns.Any(y => y.Name == x.Name))
-                    .Select(x => Tuple.Create(
-                        x, table.SuperTable.Columns.First(y => y.Name == x.Name)));
+                    .Select(x => Tuple.Create(                        x, table.SuperTable.Columns.First(y => y.Name == x.Name)));
 
                 if (inherited.Any()) {
                     var super = SelectLast<T>(table.SuperTable);
@@ -749,25 +720,27 @@ namespace DatabaseTools
                 }
             }
 
+            var cmd = CreateCommand();
+
             var nonAuto = table.Columns.Where(x => !x.AutoIncrement).ToArray();
 
             var columns = String.Join(",\n  ", nonAuto.Select(x => x.Name));
-            var values = String.Join(",\n  ", nonAuto.Select(x => FormatValue(x.GetValue(entity))));
+            var values = String.Join(",\n  ", nonAuto.Select(x => SerializeValue(cmd, x.GetValue(entity))));
 
-            var result = ExecuteNonQuery("INSERT INTO {0}\n(\n  {1}\n) VALUES (\n  {2}\n)", table.Name, columns, values);
+            cmd.CommandText = String.Format("INSERT INTO {0}\n(\n  {1}\n) VALUES (\n  {2}\n)",
+                table.Name, columns, values);
+
+            var result = cmd.ExecuteNonQuery();
 
             var auto = table.Columns.FirstOrDefault(x => x.AutoIncrement && x.PrimaryKey);
             if (auto == null) return result;
 
 #if LINUX
-            var cmd = new DBCommand("SELECT last_insert_rowid()", _sConnection);
+            cmd = new DBCommand("SELECT last_insert_rowid()", _sConnection);
 #else
-            var cmd = new DBCommand("SELECT @@IDENTITY AS ID", _sConnection);
+            cmd = new DBCommand("SELECT @@IDENTITY AS ID", _sConnection);
 #endif
-            
-            var res = cmd.ExecuteScalar();
-
-            auto.SetValue(entity, Convert.ToInt32(res));
+            auto.SetValue(entity, Convert.ToInt32(cmd.ExecuteScalar()));
 
             return result;
         }
@@ -786,16 +759,19 @@ namespace DatabaseTools
 
             var valid = table.Columns.Where(x => x != primaryKey);
 
-            var columns = String.Join(",\n  ", valid.Select(x =>
-                String.Format("{0} = {1}", x.Name, FormatValue(x.GetValue(entity)))));
+            var cmd = CreateCommand();
 
-            var predicate = String.Format("{0} = {1}", primaryKey.Name, FormatValue(primaryKey.GetValue(entity)));
+            var columns = String.Join(",\n  ", valid.Select(x =>
+                String.Format("{0} = {1}", x.Name, SerializeValue(cmd, x.GetValue(entity)))));
+
+            var predicate = String.Format("{0} = {1}", primaryKey.Name, SerializeValue(cmd, primaryKey.GetValue(entity)));
 
             var builder = new StringBuilder();
             builder.AppendFormat("UPDATE {0} SET\n  {1}\nWHERE {2}",
                 table.Name, columns, predicate);
 
-            return ExecuteNonQuery(builder.ToString());
+            cmd.CommandText = builder.ToString();
+            return cmd.ExecuteNonQuery();
         }
 
         // TODO: Delete should cascade with supertables
@@ -819,20 +795,24 @@ namespace DatabaseTools
             var table = GetTable<T>();
             var primaryKey = table.Columns.First(x => x.PrimaryKey);
 
+            var cmd = CreateCommand();
+
             var predicate = String.Join("\n  OR ", entities.Select(x => String.Format("{0} = {1}",
-                primaryKey.Name, FormatValue(primaryKey.GetValue(x)))));
+                primaryKey.Name, SerializeValue(cmd, primaryKey.GetValue(x)))));
 
             var builder = new StringBuilder();
             builder.AppendFormat("DELETE FROM {0} WHERE {1}",
                 table.Name, predicate);
 
-            if (table.CleanupMethod == null) return ExecuteNonQuery(builder.ToString());
+            cmd.CommandText = builder.ToString();
+
+            if (table.CleanupMethod == null) return cmd.ExecuteNonQuery();
 
             foreach (var ent in entities) {
                 table.CleanupMethod.Invoke(ent, new Object[0]);
             }
 
-            return ExecuteNonQuery(builder.ToString());
+            return cmd.ExecuteNonQuery();
         }
 
         public static void Disconnect()
