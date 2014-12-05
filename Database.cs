@@ -217,7 +217,7 @@ namespace DatabaseTools
         private static String SerializeExpression(DBCommand cmd, Expression exp, bool removeParam = false)
         {
             if (!RequiresParam(exp)) {
-                return SerializeValue(cmd, Expression.Lambda<Func<Object>>(exp).Compile()());
+                return SerializeValue(cmd, Expression.Lambda<Func<Object>>(Expression.Convert(exp, typeof(Object))).Compile()());
             }
 
             if (exp is UnaryExpression) {
