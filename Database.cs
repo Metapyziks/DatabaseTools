@@ -217,6 +217,11 @@ namespace DatabaseTools
         private static String SerializeExpression(DBCommand cmd, Expression exp, bool removeParam = false)
         {
             if (!RequiresParam(exp)) {
+                if (exp.Type == typeof(bool)) {
+                    Expression<Func<bool,String>> toString = x => x ? "'1'='1'" : "'1'='0'";
+                    return Expression.Lambda<Func<String>>(Expression.Invoke(toString, exp)).Compile()();
+                }
+
                 return SerializeValue(cmd, Expression.Lambda<Func<Object>>(Expression.Convert(exp, typeof(Object))).Compile()());
             }
 
