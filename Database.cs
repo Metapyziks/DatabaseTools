@@ -1,23 +1,28 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Data.SqlServerCe;
-using System.Linq;
-using System.Text;
 using System.Globalization;
+using System.Linq;
+using System.Linq.Expressions;
 using System.Reflection;
 using System.IO;
-using System.Linq.Expressions;
 using System.Diagnostics;
+using System.Text;
 
-#if LINUX
-    using DBConnection = Mono.Data.Sqlite.SqliteConnection;
-    using DBCommand = Mono.Data.Sqlite.SqliteCommand;
-    using DBDataReader = Mono.Data.Sqlite.SqliteDataReader;
-#else
-    using DBConnection = System.Data.SqlServerCe.SqlCeConnection;
-    using DBCommand = System.Data.SqlServerCe.SqlCeCommand;
-    using DBDataReader = System.Data.SqlServerCe.SqlCeDataReader;
-    using DBEngine = System.Data.SqlServerCe.SqlCeEngine;
+#if SQLITE
+using DBConnection = Mono.Data.Sqlite.SqliteConnection;
+using DBCommand = Mono.Data.Sqlite.SqliteCommand;
+using DBDataReader = Mono.Data.Sqlite.SqliteDataReader;
+#elif SQL_SERVER_CE
+using DBConnection = System.Data.SqlServerCe.SqlCeConnection;
+using DBCommand = System.Data.SqlServerCe.SqlCeCommand;
+using DBDataReader = System.Data.SqlServerCe.SqlCeDataReader;
+using DBEngine = System.Data.SqlServerCe.SqlCeEngine;
+using DBParam = System.Data.SqlServerCe.SqlCeParameter;
+#elif SQL_SERVER
+using DBConnection = System.Data.SqlClient.SqlConnection;
+using DBCommand = System.Data.SqlClient.SqlCommand;
+using DBDataReader = System.Data.SqlClient.SqlDataReader;
+using DBParam = System.Data.SqlClient.SqlParameter;
 #endif
 
 namespace DatabaseTools
@@ -132,6 +137,7 @@ namespace DatabaseTools
             }
         }
 
+#if SQLITE || SQL_SERVER_CE
         public static void ConnectLocal()
         {
             //#if DEBUG
@@ -143,6 +149,7 @@ namespace DatabaseTools
             else
                 Connect("Data Source={0};", FileName);
         }
+#endif
 
         public static void DropDatabase()
         {
@@ -152,16 +159,16 @@ namespace DatabaseTools
             if (File.Exists(FileName))
                 File.Delete(FileName);
         }
-
+        
+#if SQL_SERVER_CE
         private static void CreateDatabase(String connStrFormat, params String[] args)
         {
-#if !LINUX
             var engine = new DBEngine(String.Format(connStrFormat, args));
             engine.CreateDatabase();
             engine.Dispose();
-#endif
             Connect(connStrFormat, args);
         }
+#endif
 
         private static DatabaseTable CreateTable(Type type)
         {
@@ -172,7 +179,7 @@ namespace DatabaseTools
 
         private static DBCommand CreateCommand()
         {
-            return new SqlCeCommand {Connection = _sConnection};
+            return new DBCommand {Connection = _sConnection};
         }
 
         private static bool RequiresParam(Expression exp)
@@ -207,7 +214,7 @@ namespace DatabaseTools
         private static String SerializeValue(DBCommand cmd, Object value)
         {
             var name = "@Param" + cmd.Parameters.Count;
-            var param = new SqlCeParameter(name, value ?? DBNull.Value);
+            var param = new DBParam(name, value ?? DBNull.Value);
 
             cmd.Parameters.Add(param);
 
@@ -339,7 +346,7 @@ namespace DatabaseTools
 
         public static bool TableExists(DatabaseTable table)
         {
-#if LINUX
+#if SQLITE
             String statement = String.Format("SELECT * FROM sqlite_master " +
                 "WHERE type = 'table' AND name = '{0}'", table.Name);
 #else
@@ -538,7 +545,7 @@ namespace DatabaseTools
 
         public static int Begin()
         {
-#if LINUX
+#if SQLITE
             return ExecuteNonQuery("BEGIN");
 #else
             // return ExecuteNonQuery("BEGIN TRANSACTION");
@@ -548,7 +555,7 @@ namespace DatabaseTools
 
         public static int End()
         {
-#if LINUX
+#if SQLITE
             return ExecuteNonQuery("END");
 #else
             // return ExecuteNonQuery("COMMIT TRANSACTION");
@@ -740,7 +747,7 @@ namespace DatabaseTools
             var auto = table.Columns.FirstOrDefault(x => x.AutoIncrement && x.PrimaryKey);
             if (auto == null) return result;
 
-#if LINUX
+#if SQLITE
             cmd = new DBCommand("SELECT last_insert_rowid()", _sConnection);
 #else
             cmd = new DBCommand("SELECT @@IDENTITY AS ID", _sConnection);
