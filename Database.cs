@@ -18,7 +18,7 @@ using DBCommand = System.Data.SqlServerCe.SqlCeCommand;
 using DBDataReader = System.Data.SqlServerCe.SqlCeDataReader;
 using DBEngine = System.Data.SqlServerCe.SqlCeEngine;
 using DBParam = System.Data.SqlServerCe.SqlCeParameter;
-#elif SQL_SERVER
+#elif SQL_CLIENT
 using DBConnection = System.Data.SqlClient.SqlConnection;
 using DBCommand = System.Data.SqlClient.SqlCommand;
 using DBDataReader = System.Data.SqlClient.SqlDataReader;
