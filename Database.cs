@@ -14,41 +14,43 @@ namespace DatabaseTools
     using DBConnection = Mono.Data.Sqlite.SqliteConnection;
     using DBCommand = Mono.Data.Sqlite.SqliteCommand;
     using DBDataReader = Mono.Data.Sqlite.SqliteDataReader;
-
-    namespace Sqlite
-    {
 #elif SQL_SERVER_CE
     using DBConnection = System.Data.SqlServerCe.SqlCeConnection;
     using DBCommand = System.Data.SqlServerCe.SqlCeCommand;
     using DBDataReader = System.Data.SqlServerCe.SqlCeDataReader;
     using DBEngine = System.Data.SqlServerCe.SqlCeEngine;
     using DBParam = System.Data.SqlServerCe.SqlCeParameter;
-    
-    namespace SqlServerCe
-    {
 #elif SQL_CLIENT
     using DBConnection = System.Data.SqlClient.SqlConnection;
     using DBCommand = System.Data.SqlClient.SqlCommand;
     using DBDataReader = System.Data.SqlClient.SqlDataReader;
     using DBParam = System.Data.SqlClient.SqlParameter;
+#endif
 
+    public class LoggedMessageEventArgs : EventArgs
+    {
+        public EventLogEntryType Type { get; private set; }
+        public String Message { get; private set; }
+
+        public LoggedMessageEventArgs(EventLogEntryType type, String message)
+        {
+            Message = message;
+            Type = type;
+        }
+    }
+
+    public delegate void LoggedMessageHandler(LoggedMessageEventArgs e);
+    
+#if SQLITE
+    namespace Sqlite
+    {
+#elif SQL_SERVER_CE
+    namespace SqlServerCe
+    {
+#elif SQL_CLIENT
     namespace SqlClient
     {
 #endif
-        public class LoggedMessageEventArgs : EventArgs
-        {
-            public EventLogEntryType Type { get; private set; }
-            public String Message { get; private set; }
-
-            public LoggedMessageEventArgs(EventLogEntryType type, String message)
-            {
-                Message = message;
-                Type = type;
-            }
-        }
-
-        public delegate void LoggedMessageHandler(LoggedMessageEventArgs e);
-
         public static class Database
         {
             public static event LoggedMessageHandler LoggedMessage;
