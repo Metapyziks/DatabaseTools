@@ -797,10 +797,10 @@ namespace DatabaseTools
             }
 
             // TODO: Delete should cascade with supertables
-            public static int Delete<T>(T entity)
+            public static int Delete<T>(params T[] entities)
                 where T : new()
             {
-                return Delete<T>(new T[] { entity });
+                return Delete(entities.AsEnumerable());
             }
 
             public static int Delete<T>(params Expression<Func<T, bool>>[] predicates)
