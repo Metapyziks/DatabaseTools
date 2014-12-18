@@ -131,7 +131,7 @@ namespace DatabaseTools
                 Log("Establishing database connection...");
                 _sConnectionString = args.Length == 0 ? connStrFormat : String.Format(connStrFormat, args);
                 _sConnection = new DBConnection(_sConnectionString);
-                Connection.Open();
+                _sConnection.Open();
 
                 Type[] types;
 
