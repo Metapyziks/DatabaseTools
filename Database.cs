@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
@@ -104,19 +105,33 @@ namespace DatabaseTools
                 get { return Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Database.sdf"); }
             }
 
+            private static String _sConnectionString;
             private static DBConnection _sConnection;
+
+            internal static DBConnection Connection
+            {
+                get
+                {
+                    if (_sConnection == null || _sConnection.State == ConnectionState.Closed ||
+                        _sConnection.State == ConnectionState.Broken) {
+                        Connect(_sConnectionString);
+                    }
+
+                    return _sConnection;
+                }
+            }
 
             private static readonly List<DatabaseTable> _sTables = new List<DatabaseTable>();
 
-            public static void Connect(String connStrFormat, params String[] args)
+            public static void Connect(String connStrFormat, params Object[] args)
             {
                 if (_sConnection != null)
                     Disconnect();
 
                 Log("Establishing database connection...");
-                String connectionString = String.Format(connStrFormat, args);
-                _sConnection = new DBConnection(connectionString);
-                _sConnection.Open();
+                _sConnectionString = args.Length == 0 ? connStrFormat : String.Format(connStrFormat, args);
+                _sConnection = new DBConnection(_sConnectionString);
+                Connection.Open();
 
                 Type[] types;
 
@@ -163,7 +178,7 @@ namespace DatabaseTools
 
             public static void DropDatabase()
             {
-                if (_sConnection != null)
+                if (Connection != null)
                     Disconnect();
 
                 if (File.Exists(FileName))
@@ -189,7 +204,7 @@ namespace DatabaseTools
 
             private static DBCommand CreateCommand()
             {
-                return new DBCommand {Connection = _sConnection};
+                return new DBCommand {Connection = Connection};
             }
 
             private static bool RequiresParam(Expression exp)
@@ -324,7 +339,7 @@ namespace DatabaseTools
 
             public static int ExecuteNonQuery(String format, params Object[] args)
             {
-                var cmd = new DBCommand(String.Format(format, args), _sConnection);
+                var cmd = new DBCommand(String.Format(format, args), Connection);
                 LogVerbose(cmd.CommandText);
                 return cmd.ExecuteNonQuery();
             }
@@ -363,7 +378,7 @@ namespace DatabaseTools
                 String statement = String.Format("SELECT * FROM INFORMATION_SCHEMA.TABLES " +
                     "WHERE TABLE_NAME = '{0}'", table.Name);
 #endif
-                DBCommand cmd = new DBCommand(statement, _sConnection);
+                DBCommand cmd = new DBCommand(statement, Connection);
                 using (var reader = cmd.ExecuteReader()) {
                     return reader.Read();
                 }
@@ -760,7 +775,7 @@ namespace DatabaseTools
 #if SQLITE
                 cmd = new DBCommand("SELECT last_insert_rowid()", _sConnection);
 #else
-                cmd = new DBCommand("SELECT @@IDENTITY AS ID", _sConnection);
+                cmd = new DBCommand("SELECT @@IDENTITY AS ID", Connection);
 #endif
                 auto.SetValue(entity, Convert.ToInt32(cmd.ExecuteScalar()));
 
@@ -839,7 +854,7 @@ namespace DatabaseTools
 
             public static void Disconnect()
             {
-                _sConnection.Close();
+                Connection.Close();
                 _sConnection = null;
 
                 _sTables.Clear();
