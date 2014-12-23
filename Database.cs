@@ -15,6 +15,7 @@ namespace DatabaseTools
     using DBConnection = Mono.Data.Sqlite.SqliteConnection;
     using DBCommand = Mono.Data.Sqlite.SqliteCommand;
     using DBDataReader = Mono.Data.Sqlite.SqliteDataReader;
+    using DBParam = Mono.Data.Sqlite.SqliteParameter;
 #elif SQL_SERVER_CE
     using DBConnection = System.Data.SqlServerCe.SqlCeConnection;
     using DBCommand = System.Data.SqlServerCe.SqlCeCommand;
@@ -185,12 +186,14 @@ namespace DatabaseTools
                     File.Delete(FileName);
             }
         
-#if SQL_SERVER_CE
+#if SQL_SERVER_CE || SQLITE
             private static void CreateDatabase(String connStrFormat, params String[] args)
             {
+#if SQL_SERVER_CE
                 var engine = new DBEngine(String.Format(connStrFormat, args));
                 engine.CreateDatabase();
                 engine.Dispose();
+#endif
                 Connect(connStrFormat, args);
             }
 #endif
