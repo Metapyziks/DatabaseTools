@@ -136,7 +136,7 @@ namespace DatabaseTools
                 Type[] types;
 
                 try {
-                    types = Assembly.GetEntryAssembly().GetTypes();
+                    types = Assembly.GetCallingAssembly().GetTypes();
                 } catch (ReflectionTypeLoadException e) {
                     Log(e);
                     throw;
